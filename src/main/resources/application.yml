@@ -1,0 +1,13 @@
+spring:
+  application:
+    name:
+      easycontract
+  datasource:
+    url: jdbc:mysql://localhost:3306/contract_db?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false
+    username: root
+    password: 123456
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+mybatis:
+  mapper-locations: classpath*:com/easycontract/mapper/*.xml  # XML文件路径
+  type-aliases-package: com.easycontract.entity  # 实体类包路径

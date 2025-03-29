@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.easycontract.mapper.ContractRuleMapper">
+    <resultMap id="contractRule" type="com.easycontract.entity.po.ContractRulePO">
+        <id property="id" column="id"/>
+        <id property="code" column="code"/>
+        <result property="name" column="name"/>
+        <result property="description" column="description"/>
+    </resultMap>
+
+    <resultMap id="contractLaw" type="com.easycontract.entity.po.ContractLaw">
+        <id property="id" column="id"/>
+        <id property="contractCode" column="contract_code"/>
+        <result property="law" column="law"/>
+        <!-- 新增字段映射 -->
+        <result property="lawName" column="law_name"/>
+        <result property="article" column="article"/>
+    </resultMap>
+    
+    <insert id="insertContractRule" parameterType="com.easycontract.entity.po.ContractRulePO">
+        insert into contract_rule(`code`, `name`, `description`)
+        values (#{code}, #{name}, #{description})
+    </insert>
+
+    <insert id="insertContractLaw">
+        insert into contract_law(`contract_code`, `law`, `law_name`, `article`)
+        values (#{contractCode}, #{law}, #{lawName}, #{article})
+    </insert>
+
+    <select id="getContractRule" resultMap="contractRule">
+        select
+            id,
+            code,
+            name,
+            description
+        from contract_rule
+        where code = #{code} limit 1
+    </select>
+
+    <select id="getAllContractRule" resultMap="contractRule">
+        select
+            id,
+            code,
+            name,
+            description
+        from contract_rule
+        order by code
+    </select>
+
+    <select id="getContractLaw" resultMap="contractLaw">
+        select
+        id,
+        contract_code,
+        law,
+        law_name,
+        article
+        from contract_law
+        where contract_code = #{code}
+    </select>
+
+    <select id="getAllContractLaw" resultMap="contractLaw">
+        select
+        id,
+        contract_code,
+        law,
+        law_name,  <!-- 新增 -->
+        article               <!-- 新增 -->
+        from contract_law
+        order by contract_code
+    </select>
+
+    <update id="updateContractRule" parameterType="com.easycontract.entity.po.ContractRulePO">
+        update contract_rule
+        set name = #{name}, description = #{description}
+        where code = #{code}
+    </update>
+
+    <update id="updateContractLaw">
+        update contract_law
+        set law = #{law},
+        law_name = #{lawName},  <!-- 新增 -->
+        article = #{article}     <!-- 新增 -->
+        where id = #{id}
+    </update>
+
+    <delete id="deleteContractRule">
+        delete from contract_rule where id = #{id}
+    </delete>
+
+    <delete id="deleteContractLaw">
+        delete from contract_law where id = #{id}
+    </delete>
+
+    <delete id="deleteContractLawByCode">
+        delete from contract_law where contract_code = #{code}
+    </delete>
+</mapper>
