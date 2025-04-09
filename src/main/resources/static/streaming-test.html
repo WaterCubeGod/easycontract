@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>流式API测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        textarea {
+            width: 100%;
+            height: 100px;
+            margin-bottom: 10px;
+            padding: 10px;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        #response {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            min-height: 200px;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <h1>流式API测试</h1>
+    
+    <textarea id="prompt" placeholder="输入您的问题..."></textarea>
+    
+    <div>
+        <button onclick="testOriginalStream()">测试原始流式API</button>
+        <button onclick="testDirectStream()">测试直接流式API</button>
+        <button onclick="testPublicStream()">测试公开流式API</button>
+    </div>
+    
+    <div id="response"></div>
+    
+    <script>
+        function testOriginalStream() {
+            testStream('/api/ai/generate/stream');
+        }
+        
+        function testDirectStream() {
+            testStream('/api/direct/ai/stream');
+        }
+        
+        function testPublicStream() {
+            testStream('/api/public/ai/generate/stream');
+        }
+        
+        function testStream(url) {
+            const prompt = document.getElementById('prompt').value;
+            const responseDiv = document.getElementById('response');
+            
+            responseDiv.innerHTML = '正在等待响应...\n';
+            
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: prompt
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+                
+                function processStream({ done, value }) {
+                    if (done) {
+                        return;
+                    }
+                    
+                    buffer += decoder.decode(value, { stream: true });
+                    
+                    // 处理SSE格式
+                    const lines = buffer.split('\n\n');
+                    buffer = lines.pop(); // 保留最后一个不完整的块
+                    
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const data = line.substring(6);
+                            responseDiv.innerHTML += data;
+                        }
+                    }
+                    
+                    return reader.read().then(processStream);
+                }
+                
+                return reader.read().then(processStream);
+            })
+            .catch(error => {
+                responseDiv.innerHTML += `\n错误: ${error.message}`;
+            });
+        }
+    </script>
+</body>
+</html>

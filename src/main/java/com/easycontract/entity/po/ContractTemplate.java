@@ -3,6 +3,8 @@ package com.easycontract.entity.po;
 import java.util.Date;
 
 public class ContractTemplate {
+    private String id;
+
     private int contractCode;
 
     private String contractType;
@@ -18,6 +20,14 @@ public class ContractTemplate {
     private long size;
 
     private Date createdAt;
+
+    public String getId() {
+        return id;
+    }
+
+    public void setId(String id) {
+        this.id = id;
+    }
 
     public int getContractCode() {
         return contractCode;

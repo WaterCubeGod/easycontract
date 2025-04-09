@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.easycontract.mapper.UserMapper">
+    <resultMap id="userMap" type="com.easycontract.entity.po.User">
+        <id property="id" column="id"/>
+        <result property="username" column="username"/>
+        <result property="password" column="password"/>
+        <result property="email" column="email"/>
+        <result property="phone" column="phone"/>
+        <result property="status" column="status"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+    
+    <resultMap id="roleMap" type="com.easycontract.entity.po.Role">
+        <id property="id" column="id"/>
+        <result property="name" column="name"/>
+        <result property="code" column="code"/>
+        <result property="description" column="description"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+    
+    <!-- 用户相关 -->
+    <select id="findByUsername" resultMap="userMap">
+        SELECT * FROM user WHERE username = #{username}
+    </select>
+    
+    <select id="findById" resultMap="userMap">
+        SELECT * FROM user WHERE id = #{id}
+    </select>
+    
+    <select id="findAll" resultMap="userMap">
+        SELECT * FROM user
+    </select>
+    
+    <insert id="insert" parameterType="com.easycontract.entity.po.User" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO user (username, password, email, phone, status)
+        VALUES (#{username}, #{password}, #{email}, #{phone}, #{status})
+    </insert>
+    
+    <update id="update" parameterType="com.easycontract.entity.po.User">
+        UPDATE user
+        <set>
+            <if test="password != null">password = #{password},</if>
+            <if test="email != null">email = #{email},</if>
+            <if test="phone != null">phone = #{phone},</if>
+            <if test="status != null">status = #{status},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+    
+    <delete id="deleteById">
+        DELETE FROM user WHERE id = #{id}
+    </delete>
+    
+    <!-- 角色相关 -->
+    <select id="findRolesByUserId" resultMap="roleMap">
+        SELECT r.* FROM role r
+        JOIN user_role ur ON r.id = ur.role_id
+        WHERE ur.user_id = #{userId}
+    </select>
+    
+    <select id="findRoleById" resultMap="roleMap">
+        SELECT * FROM role WHERE id = #{id}
+    </select>
+    
+    <select id="findRoleByCode" resultMap="roleMap">
+        SELECT * FROM role WHERE code = #{code}
+    </select>
+    
+    <!-- 用户角色关联 -->
+    <insert id="insertUserRole" parameterType="com.easycontract.entity.po.UserRole">
+        INSERT INTO user_role (user_id, role_id)
+        VALUES (#{userId}, #{roleId})
+    </insert>
+    
+    <delete id="deleteUserRoleByUserId">
+        DELETE FROM user_role WHERE user_id = #{userId}
+    </delete>
+</mapper>

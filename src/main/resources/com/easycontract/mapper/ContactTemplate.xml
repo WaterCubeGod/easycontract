@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.easycontract.mapper.ContractTemplateMapper">
+    <resultMap id="contractTemplate" type="com.easycontract.entity.po.ContractTemplate">
+        <id property="id" column="id"/>
+        <id property="contractCode" column="contract_code"/>
+        <result property="contractType" column="contract_type"/>
+        <result property="title" column="title"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="extension" column="extension"/>
+        <result property="path" column="path"/>
+        <result property="size" column="size"/>
+    </resultMap>
+
+    <!-- 通用查询条件 -->
+    <sql id="baseCondition">
+        <where>
+            <!-- 复合主键条件 -->
+            <if test="id != null">
+                AND id = #{id}
+            </if>
+            <if test="contractCode != null and contractCode != ''">
+                AND contract_code = #{contractCode}
+            </if>
+
+            <!-- 常规字段条件 -->
+            <if test="contractType != null and contractType != ''">
+                AND contract_type = #{contractType}
+            </if>
+            <if test="title != null and title != ''">
+                AND title LIKE CONCAT('%', #{title}, '%')
+            </if>
+            <if test="extension != null and extension != ''">
+                AND extension = #{extension}
+            </if>
+            <if test="path != null and path != ''">
+                AND path = #{path}
+            </if>
+            <if test="size != null">
+                AND size = #{size}
+            </if>
+        </where>
+    </sql>
+
+    <!-- 动态查询 -->
+    <select id="selectByCondition"
+            parameterType="com.easycontract.entity.po.ContractTemplate"
+            resultMap="contractTemplate">
+        SELECT * FROM contract_template
+        <include refid="baseCondition"/>
+        ORDER BY created_at DESC
+    </select>
+
+    <!-- 动态更新 -->
+    <update id="updateByCondition" parameterType="map">
+        UPDATE contract_template
+        <set>
+            <if test="entity.contractType != null">contract_type = #{entity.contractType},</if>
+            <if test="entity.title != null">title = #{entity.title},</if>
+            <if test="entity.extension != null">extension = #{entity.extension},</if>
+            <if test="entity.path != null">path = #{entity.path},</if>
+            <if test="entity.size != null">size = #{entity.size},</if>
+        </set>
+        <include refid="baseCondition"/>
+    </update>
+
+    <!-- 动态删除 -->
+    <delete id="deleteByCondition" parameterType="com.easycontract.entity.po.ContractTemplate">
+        DELETE FROM contract_template
+        <include refid="baseCondition"/>
+    </delete>
+
+    <insert id="insert" parameterType="com.easycontract.entity.po.ContractTemplate">
+        INSERT INTO contract_template (
+            id,
+            contract_code,
+            contract_type,
+            title,
+            created_at,
+            extension,
+            path,
+            size
+        ) VALUES (
+                     #{id},
+                     #{contractCode},
+                     #{contractType},
+                     #{title},
+                     #{createdAt},
+                     #{extension},
+                     #{path},
+                     #{size}
+                 )
+    </insert>
+</mapper>
