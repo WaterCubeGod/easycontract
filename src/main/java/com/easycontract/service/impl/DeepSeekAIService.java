@@ -26,19 +26,10 @@ public class DeepSeekAIService implements AIService {
                 .build();
     }
 
-    @Override
-    public ChatResponse generateText(String prompt) {
-        ChatRequest request = createChatRequest(prompt, false);
 
-        return webClient.post()
-                .bodyValue(request)
-                .retrieve()
-                .bodyToMono(ChatResponse.class)
-                .block();
-    }
 
     @Override
-    public Flux<String> generateTextStream(String prompt) {
+    public Flux<String> generateText(String prompt) {
         ChatRequest request = createChatRequest(prompt, true);
 
         return webClient.post()

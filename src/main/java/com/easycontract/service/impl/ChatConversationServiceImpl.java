@@ -10,6 +10,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -18,7 +19,7 @@ public class ChatConversationServiceImpl implements ChatConversationService {
 
     @Autowired
     private ChatConversationRepository chatConversationRepository;
-    
+
     @Autowired
     private AIService aiService;
 
@@ -29,26 +30,27 @@ public class ChatConversationServiceImpl implements ChatConversationService {
         conversation.setUserId(userId);
         conversation.setUsername(username);
         conversation.setTitle(generateTitle(initialPrompt));
-        conversation.setCreatedAt(LocalDateTime.now());
-        conversation.setUpdatedAt(LocalDateTime.now());
+        LocalDateTime now = LocalDateTime.now();
+        conversation.setCreatedAt(now.format(DateTimeFormatter.ISO_DATE_TIME));
+        conversation.setUpdatedAt(now.format(DateTimeFormatter.ISO_DATE_TIME));
         conversation.setStatus("active");
         conversation.setTags(new ArrayList<>());
         conversation.setMessages(new ArrayList<>());
         conversation.setContextPath("/");
-        
+
         // 添加初始用户消息
         ChatConversation.Message message = new ChatConversation.Message();
         message.setMessageId(UUID.randomUUID().toString());
         message.setParentMessageId(null); // 根消息
         message.setRole("user");
         message.setContent(initialPrompt);
-        message.setTimestamp(LocalDateTime.now());
+        message.setTimestamp(LocalDateTime.now().format(DateTimeFormatter.ISO_DATE_TIME));
         message.setEdited(false);
         message.setRevisions(new ArrayList<>());
         message.setBranches(new ArrayList<>());
-        
+
         conversation.getMessages().add(message);
-        
+
         // 初始化统计信息
         ChatConversation.Statistics stats = new ChatConversation.Statistics();
         stats.setMessageCount(1);
@@ -58,7 +60,7 @@ public class ChatConversationServiceImpl implements ChatConversationService {
         stats.setBranchCount(0);
         stats.setEditCount(0);
         conversation.setStatistics(stats);
-        
+
         return chatConversationRepository.save(conversation);
     }
 
@@ -68,47 +70,47 @@ public class ChatConversationServiceImpl implements ChatConversationService {
         if (conversation == null) {
             throw new RuntimeException("对话不存在");
         }
-        
+
         // 创建新消息
         ChatConversation.Message message = new ChatConversation.Message();
         message.setMessageId(UUID.randomUUID().toString());
         message.setParentMessageId(parentMessageId);
         message.setRole("user");
         message.setContent(content);
-        message.setTimestamp(LocalDateTime.now());
+        message.setTimestamp(LocalDateTime.now().format(DateTimeFormatter.ISO_DATE_TIME));
         message.setEdited(false);
         message.setRevisions(new ArrayList<>());
         message.setBranches(new ArrayList<>());
-        
+
         // 添加消息
         conversation.getMessages().add(message);
-        
+
         // 更新统计信息
         conversation.getStatistics().setMessageCount(conversation.getStatistics().getMessageCount() + 1);
         conversation.getStatistics().setUserMessageCount(conversation.getStatistics().getUserMessageCount() + 1);
-        conversation.setUpdatedAt(LocalDateTime.now());
-        
+        conversation.setUpdatedAt(LocalDateTime.now().format(DateTimeFormatter.ISO_DATE_TIME));
+
         // 更新上下文路径
         updateContextPath(conversation);
-        
+
         return chatConversationRepository.save(conversation);
     }
 
     @Override
-    public ChatConversation addAssistantMessage(String conversationId, String content, String parentMessageId, 
+    public ChatConversation addAssistantMessage(String conversationId, String content, String parentMessageId,
                                               String model, Integer promptTokens, Integer responseTokens) {
         ChatConversation conversation = getConversation(conversationId);
         if (conversation == null) {
             throw new RuntimeException("对话不存在");
         }
-        
+
         // 创建新消息
         ChatConversation.Message message = new ChatConversation.Message();
         message.setMessageId(UUID.randomUUID().toString());
         message.setParentMessageId(parentMessageId);
         message.setRole("assistant");
         message.setContent(content);
-        message.setTimestamp(LocalDateTime.now());
+        message.setTimestamp(LocalDateTime.now().format(DateTimeFormatter.ISO_DATE_TIME));
         message.setEdited(false);
         message.setModel(model);
         message.setPromptTokens(promptTokens);
@@ -116,19 +118,19 @@ public class ChatConversationServiceImpl implements ChatConversationService {
         message.setTotalTokens(promptTokens + responseTokens);
         message.setRevisions(new ArrayList<>());
         message.setBranches(new ArrayList<>());
-        
+
         // 添加消息
         conversation.getMessages().add(message);
-        
+
         // 更新统计信息
         conversation.getStatistics().setMessageCount(conversation.getStatistics().getMessageCount() + 1);
         conversation.getStatistics().setAssistantMessageCount(conversation.getStatistics().getAssistantMessageCount() + 1);
         conversation.getStatistics().setTotalTokens(conversation.getStatistics().getTotalTokens() + message.getTotalTokens());
-        conversation.setUpdatedAt(LocalDateTime.now());
-        
+        conversation.setUpdatedAt(LocalDateTime.now().format(DateTimeFormatter.ISO_DATE_TIME));
+
         // 更新上下文路径
         updateContextPath(conversation);
-        
+
         return chatConversationRepository.save(conversation);
     }
 
@@ -138,38 +140,38 @@ public class ChatConversationServiceImpl implements ChatConversationService {
         if (conversation == null) {
             throw new RuntimeException("对话不存在");
         }
-        
+
         // 查找消息
         Optional<ChatConversation.Message> optMessage = conversation.getMessages().stream()
                 .filter(m -> m.getMessageId().equals(messageId))
                 .findFirst();
-        
+
         if (optMessage.isEmpty()) {
             throw new RuntimeException("消息不存在");
         }
-        
+
         ChatConversation.Message message = optMessage.get();
-        
+
         // 创建修订记录
         ChatConversation.Revision revision = new ChatConversation.Revision();
         revision.setRevisionId(UUID.randomUUID().toString());
         revision.setContent(message.getContent());
-        revision.setTimestamp(LocalDateTime.now());
+        revision.setTimestamp(LocalDateTime.now().format(DateTimeFormatter.ISO_DATE_TIME));
         revision.setReason(reason);
-        
+
         if (message.getRevisions() == null) {
             message.setRevisions(new ArrayList<>());
         }
         message.getRevisions().add(revision);
-        
+
         // 更新消息内容
         message.setContent(newContent);
         message.setEdited(true);
-        
+
         // 更新统计信息
         conversation.getStatistics().setEditCount(conversation.getStatistics().getEditCount() + 1);
-        conversation.setUpdatedAt(LocalDateTime.now());
-        
+        conversation.setUpdatedAt(LocalDateTime.now().format(DateTimeFormatter.ISO_DATE_TIME));
+
         return chatConversationRepository.save(conversation);
     }
 
@@ -179,34 +181,34 @@ public class ChatConversationServiceImpl implements ChatConversationService {
         if (conversation == null) {
             throw new RuntimeException("对话不存在");
         }
-        
+
         // 查找消息
         Optional<ChatConversation.Message> optMessage = conversation.getMessages().stream()
                 .filter(m -> m.getMessageId().equals(messageId))
                 .findFirst();
-        
+
         if (optMessage.isEmpty()) {
             throw new RuntimeException("消息不存在");
         }
-        
+
         ChatConversation.Message message = optMessage.get();
-        
+
         // 创建分支信息
         String branchId = UUID.randomUUID().toString();
         ChatConversation.Branch branch = new ChatConversation.Branch();
         branch.setBranchId(branchId);
         branch.setBranchName(branchName);
-        branch.setCreatedAt(LocalDateTime.now());
-        
+        branch.setCreatedAt(LocalDateTime.now().format(DateTimeFormatter.ISO_DATE_TIME));
+
         if (message.getBranches() == null) {
             message.setBranches(new ArrayList<>());
         }
         message.getBranches().add(branch);
-        
+
         // 更新统计信息
         conversation.getStatistics().setBranchCount(conversation.getStatistics().getBranchCount() + 1);
-        conversation.setUpdatedAt(LocalDateTime.now());
-        
+        conversation.setUpdatedAt(LocalDateTime.now().format(DateTimeFormatter.ISO_DATE_TIME));
+
         return chatConversationRepository.save(conversation);
     }
 
@@ -236,19 +238,19 @@ public class ChatConversationServiceImpl implements ChatConversationService {
         if (conversation == null) {
             throw new RuntimeException("对话不存在");
         }
-        
+
         // 构建树形结构
         Map<String, Object> tree = new HashMap<>();
         tree.put("conversationId", conversation.getConversationId());
         tree.put("title", conversation.getTitle());
         tree.put("createdAt", conversation.getCreatedAt());
-        
+
         // 构建消息树
         Map<String, List<Map<String, Object>>> messagesByParent = new HashMap<>();
-        
+
         // 初始化根节点列表
         messagesByParent.put(null, new ArrayList<>());
-        
+
         // 按父消息ID分组
         for (ChatConversation.Message message : conversation.getMessages()) {
             Map<String, Object> messageMap = new HashMap<>();
@@ -257,7 +259,7 @@ public class ChatConversationServiceImpl implements ChatConversationService {
             messageMap.put("content", message.getContent());
             messageMap.put("timestamp", message.getTimestamp());
             messageMap.put("edited", message.getEdited());
-            
+
             if (message.getEdited() && message.getRevisions() != null && !message.getRevisions().isEmpty()) {
                 List<Map<String, Object>> revisions = message.getRevisions().stream()
                         .map(r -> {
@@ -271,7 +273,7 @@ public class ChatConversationServiceImpl implements ChatConversationService {
                         .collect(Collectors.toList());
                 messageMap.put("revisions", revisions);
             }
-            
+
             if (message.getBranches() != null && !message.getBranches().isEmpty()) {
                 List<Map<String, Object>> branches = message.getBranches().stream()
                         .map(b -> {
@@ -284,22 +286,22 @@ public class ChatConversationServiceImpl implements ChatConversationService {
                         .collect(Collectors.toList());
                 messageMap.put("branches", branches);
             }
-            
+
             // 确保父消息ID的列表已初始化
             messagesByParent.putIfAbsent(message.getParentMessageId(), new ArrayList<>());
             messagesByParent.get(message.getParentMessageId()).add(messageMap);
         }
-        
+
         // 递归构建树
         List<Map<String, Object>> rootMessages = buildMessageTree(messagesByParent, null);
         tree.put("messages", rootMessages);
-        
+
         return tree;
     }
 
     private List<Map<String, Object>> buildMessageTree(Map<String, List<Map<String, Object>>> messagesByParent, String parentId) {
         List<Map<String, Object>> messages = messagesByParent.getOrDefault(parentId, new ArrayList<>());
-        
+
         for (Map<String, Object> message : messages) {
             String messageId = (String) message.get("messageId");
             List<Map<String, Object>> children = buildMessageTree(messagesByParent, messageId);
@@ -307,7 +309,7 @@ public class ChatConversationServiceImpl implements ChatConversationService {
                 message.put("children", children);
             }
         }
-        
+
         return messages;
     }
 
@@ -317,10 +319,10 @@ public class ChatConversationServiceImpl implements ChatConversationService {
         if (conversation == null) {
             throw new RuntimeException("对话不存在");
         }
-        
+
         conversation.setStatus("archived");
-        conversation.setUpdatedAt(LocalDateTime.now());
-        
+        conversation.setUpdatedAt(LocalDateTime.now().format(DateTimeFormatter.ISO_DATE_TIME));
+
         return chatConversationRepository.save(conversation);
     }
 
@@ -335,17 +337,17 @@ public class ChatConversationServiceImpl implements ChatConversationService {
         if (conversation == null) {
             throw new RuntimeException("对话不存在");
         }
-        
+
         if (conversation.getTags() == null) {
             conversation.setTags(new ArrayList<>());
         }
-        
+
         if (!conversation.getTags().contains(tag)) {
             conversation.getTags().add(tag);
-            conversation.setUpdatedAt(LocalDateTime.now());
+            conversation.setUpdatedAt(LocalDateTime.now().format(DateTimeFormatter.ISO_DATE_TIME));
             return chatConversationRepository.save(conversation);
         }
-        
+
         return conversation;
     }
 
@@ -355,13 +357,13 @@ public class ChatConversationServiceImpl implements ChatConversationService {
         if (conversation == null) {
             throw new RuntimeException("对话不存在");
         }
-        
+
         if (conversation.getTags() != null && conversation.getTags().contains(tag)) {
             conversation.getTags().remove(tag);
-            conversation.setUpdatedAt(LocalDateTime.now());
+            conversation.setUpdatedAt(LocalDateTime.now().format(DateTimeFormatter.ISO_DATE_TIME));
             return chatConversationRepository.save(conversation);
         }
-        
+
         return conversation;
     }
 
@@ -371,62 +373,66 @@ public class ChatConversationServiceImpl implements ChatConversationService {
         if (conversation == null) {
             throw new RuntimeException("对话不存在");
         }
-        
+
         // 提取对话内容
         StringBuilder dialogBuilder = new StringBuilder();
         for (ChatConversation.Message message : conversation.getMessages()) {
             dialogBuilder.append(message.getRole()).append(": ").append(message.getContent()).append("\n");
         }
-        
+
         // 使用AI生成摘要
         String summary = "对话摘要"; // 这里应该调用AI服务生成摘要
-        
+
         conversation.setSummary(summary);
-        conversation.setUpdatedAt(LocalDateTime.now());
-        
+        conversation.setUpdatedAt(LocalDateTime.now().format(DateTimeFormatter.ISO_DATE_TIME));
+
         return chatConversationRepository.save(conversation);
     }
-    
+
     // 生成对话标题
     private String generateTitle(String initialPrompt) {
         // 简单实现：截取前20个字符作为标题
         if (initialPrompt == null || initialPrompt.isEmpty()) {
             return "新对话";
         }
-        
-        String title = initialPrompt.length() > 20 ? 
-                initialPrompt.substring(0, 20) + "..." : 
+
+        String title = initialPrompt.length() > 20 ?
+                initialPrompt.substring(0, 20) + "..." :
                 initialPrompt;
-        
+
         return title;
     }
-    
+
     // 更新上下文路径
     private void updateContextPath(ChatConversation conversation) {
         // 构建消息树
         Map<String, List<String>> childrenByParent = new HashMap<>();
         Map<String, ChatConversation.Message> messagesById = new HashMap<>();
-        
+
         for (ChatConversation.Message message : conversation.getMessages()) {
-            messagesById.put(message.getMessageId(), message);
-            
-            String parentId = message.getParentMessageId();
-            childrenByParent.putIfAbsent(parentId, new ArrayList<>());
-            childrenByParent.get(parentId).add(message.getMessageId());
+            // 安全地处理消息ID
+            if (message.getMessageId() != null) {
+                messagesById.put(message.getMessageId(), message);
+
+                // 安全地处理父消息ID
+                String parentId = message.getParentMessageId();
+                childrenByParent.putIfAbsent(parentId, new ArrayList<>());
+                childrenByParent.get(parentId).add(message.getMessageId());
+            }
         }
-        
+
         // 找到根消息
         List<String> rootMessageIds = childrenByParent.getOrDefault(null, new ArrayList<>());
         if (rootMessageIds.isEmpty()) {
             conversation.setContextPath("/");
             return;
         }
-        
+
         // 构建路径
         StringBuilder pathBuilder = new StringBuilder();
         for (String rootId : rootMessageIds) {
             pathBuilder.append("/").append(rootId);
-            
+
             // 添加第一级子消息
             List<String> firstLevelChildren = childrenByParent.getOrDefault(rootId, new ArrayList<>());
             if (!firstLevelChildren.isEmpty()) {
@@ -435,7 +441,7 @@ public class ChatConversationServiceImpl implements ChatConversationService {
                 pathBuilder.append("]");
             }
         }
-        
+
         conversation.setContextPath(pathBuilder.toString());
     }
 }
