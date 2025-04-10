@@ -6,6 +6,8 @@ CREATE TABLE IF NOT EXISTS `user` (
   `email` varchar(100) DEFAULT NULL COMMENT '邮箱',
   `phone` varchar(20) DEFAULT NULL COMMENT '手机号',
   `status` tinyint(4) NOT NULL DEFAULT '1' COMMENT '状态：0-禁用，1-启用',
+  `reset_token` varchar(100) DEFAULT NULL COMMENT '密码重置令牌',
+  `reset_token_expire_time` bigint(20) DEFAULT NULL COMMENT '密码重置令牌过期时间',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`),
@@ -38,14 +40,6 @@ CREATE TABLE IF NOT EXISTS `user_role` (
 INSERT INTO `role` (`name`, `code`, `description`) VALUES
 ('管理员', 'ROLE_ADMIN', '系统管理员，拥有所有权限'),
 ('普通用户', 'ROLE_USER', '普通用户，可以访问基本功能');
-
--- 初始化管理员用户（密码为123456的BCrypt加密）
-INSERT INTO `user` (`username`, `password`, `email`, `status`) VALUES
-('admin', '$2a$10$rDxPr5lKLuEGBCBpKgVb9.ib4U/MuEa1JR5bjY5Z4BbWRVpVVIxNi', 'admin@example.com', 1);
-
--- 初始化普通用户（密码为123456的BCrypt加密）
-INSERT INTO `user` (`username`, `password`, `email`, `status`) VALUES
-('user', '$2a$10$rDxPr5lKLuEGBCBpKgVb9.ib4U/MuEa1JR5bjY5Z4BbWRVpVVIxNi', 'user@example.com', 1);
 
 -- 关联用户和角色
 INSERT INTO `user_role` (`user_id`, `role_id`) VALUES

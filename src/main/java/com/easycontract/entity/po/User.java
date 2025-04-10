@@ -12,9 +12,11 @@ public class User {
     private String email;
     private String phone;
     private Integer status; // 0-禁用，1-启用
+    private String resetToken; // 密码重置令牌
+    private Long resetTokenExpireTime; // 密码重置令牌过期时间
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
-    
+
     // 非数据库字段，用于存储用户角色
     private transient List<Role> roles;
 }

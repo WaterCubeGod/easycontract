@@ -10,6 +10,18 @@ spring:
   elasticsearch:
     rest:
       uris: localhost:9200
+  # 邮件配置
+  mail:
+    host: smtp.example.com
+    port: 587
+    username: your-email@example.com
+    password: your-email-password
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
 
 mybatis:
   mapper-locations: classpath*:com/easycontract/mapper/*.xml  # XML文件路径
@@ -29,3 +41,7 @@ security:
   jwt:
     secret: "easycontractSecretKey12345678901234567890"  # JWT密钥，建议使用复杂密钥
     expiration: 86400000  # Token过期时间，默认为24小时
+
+# 应用配置
+app:
+  frontend-url: http://localhost:8080  # 前端应用URL，用于重置密码链接

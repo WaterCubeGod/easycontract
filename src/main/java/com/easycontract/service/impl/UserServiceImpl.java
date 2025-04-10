@@ -36,6 +36,24 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    public User findByEmail(String email) {
+        User user = userMapper.findByEmail(email);
+        if (user != null) {
+            user.setRoles(userMapper.findRolesByUserId(user.getId()));
+        }
+        return user;
+    }
+
+    @Override
+    public User findByResetToken(String resetToken) {
+        User user = userMapper.findByResetToken(resetToken);
+        if (user != null) {
+            user.setRoles(userMapper.findRolesByUserId(user.getId()));
+        }
+        return user;
+    }
+
+    @Override
     public UserDTO getUserById(Long id) {
         User user = userMapper.findById(id);
         if (user == null) {
@@ -126,6 +144,13 @@ public class UserServiceImpl implements UserService {
         }
 
         return true;
+    }
+
+    @Override
+    @Transactional
+    public void updatePassword(User user, String newPassword) {
+        user.setPassword(passwordEncoder.encode(newPassword));
+        userMapper.update(user);
     }
 
     // 将User实体转换为UserDTO

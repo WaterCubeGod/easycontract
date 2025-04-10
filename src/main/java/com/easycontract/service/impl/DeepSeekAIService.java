@@ -45,13 +45,50 @@ public class DeepSeekAIService implements AIService {
                 .bodyValue(request)
                 .accept(MediaType.TEXT_EVENT_STREAM)
                 .retrieve()
-                .bodyToFlux(ChatStreamResponse.class)
-                .map(response -> {
-                    if (response.getChoices() != null && !response.getChoices().isEmpty()) {
-                        ChatStreamResponse.Delta delta = response.getChoices().get(0).getDelta();
-                        return delta != null && delta.getContent() != null ? delta.getContent() : "";
+                // 使用String类型接收原始数据，而不是尝试反序列化为ChatStreamResponse
+                .bodyToFlux(String.class)
+                .onErrorResume(e -> {
+                    // 当发生错误时，返回一个包含错误信息的Flux
+                    System.err.println("流式输出错误: " + e.getMessage());
+                    e.printStackTrace();
+                    // 返回一个空的Flux，不影响前面已经发送的数据
+                    return Flux.empty();
+                })
+                .map(rawResponse -> {
+                    try {
+
+                        // 尝试从原始响应中提取文本内容
+                        if (rawResponse != null && !rawResponse.isEmpty()) {
+                            // 如果是[DONE]消息或其他特殊消息，返回空字符串
+                            if (rawResponse.contains("[DONE]")) {
+                                return "";
+                            }
+
+                            // 检查是否包含"content"字段
+                            if (rawResponse.contains("\"content\":")) {
+                                // 简单提取content字段的值
+                                int contentIndex = rawResponse.indexOf("\"content\":");
+                                if (contentIndex >= 0) {
+                                    int valueStart = rawResponse.indexOf('"', contentIndex + 10) + 1;
+                                    int valueEnd = rawResponse.indexOf('"', valueStart);
+                                    if (valueStart > 0 && valueEnd > valueStart) {
+                                        String content = rawResponse.substring(valueStart, valueEnd);
+                                        return content;
+                                    }
+                                }
+                            }
+
+                            // 如果数据是纯文本，直接返回
+                            if (!rawResponse.startsWith("{") && !rawResponse.startsWith("[")) {
+                                System.out.println("纯文本内容: " + rawResponse);
+                                return rawResponse;
+                            }
+                        }
+                    } catch (Exception e) {
+                        System.err.println("解析流式响应错误: " + e.getMessage());
+                        e.printStackTrace();
                     }
-                    return "";
+                    return ""; // 默认返回空字符串
                 });
     }
 

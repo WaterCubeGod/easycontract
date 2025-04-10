@@ -92,15 +92,21 @@ public class AIController {
                 })
                 .doOnComplete(() -> {
                     // 当流完成时，保存对话历史
-                    if (currentUser != null) {
-                        String fullResponse = responseCollector.get().toString();
-                        chatHistoryService.saveChatHistory(
-                            currentUser.getId(),
-                            currentUser.getUsername(),
-                            prompt,
-                            fullResponse,
-                            "deepseek-chat" // 模型名称
-                        );
+                    try {
+                        if (currentUser != null) {
+                            String fullResponse = responseCollector.get().toString();
+                            chatHistoryService.saveChatHistory(
+                                currentUser.getId(),
+                                currentUser.getUsername(),
+                                prompt,
+                                fullResponse,
+                                "deepseek-chat" // 模型名称
+                            );
+                        }
+                    } catch (Exception e) {
+                        // 异常处理，仅记录日志，不影响流式输出
+                        System.err.println("保存对话历史失败: " + e.getMessage());
+                        e.printStackTrace();
                     }
                 });
     }

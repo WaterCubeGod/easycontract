@@ -6,6 +6,7 @@ import com.easycontract.entity.po.User;
 import com.easycontract.entity.vo.Response;
 import com.easycontract.security.JwtUtils;
 import com.easycontract.security.UserDetailsImpl;
+import com.easycontract.service.EmailService;
 import com.easycontract.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @RestController
@@ -32,6 +34,9 @@ public class AuthController {
 
     @Autowired
     private JwtUtils jwtUtils;
+
+    @Autowired
+    private EmailService emailService;
 
     @PostMapping("/login")
     public Response<?> login(@RequestBody LoginRequest loginRequest) {
@@ -68,6 +73,58 @@ public class AuthController {
             return Response.success(userService.createUser(user, roles));
         } catch (Exception e) {
             return Response.fail("注册失败: " + e.getMessage());
+        }
+    }
+
+    @PostMapping("/forgot-password")
+    public Response<?> forgotPassword(@RequestParam String email) {
+        try {
+            User user = userService.findByEmail(email);
+            if (user == null) {
+                return Response.fail("该邮箱未注册");
+            }
+
+            // 生成重置令牌
+            String resetToken = UUID.randomUUID().toString();
+
+            // 设置令牌过期时间（24小时）
+            user.setResetToken(resetToken);
+            user.setResetTokenExpireTime(System.currentTimeMillis() + 24 * 60 * 60 * 1000);
+            userService.updateUser(user);
+
+            // 发送重置密码邮件
+            emailService.sendPasswordResetEmail(user.getEmail(), resetToken);
+
+            return Response.success("重置密码链接已发送到您的邮箱");
+        } catch (Exception e) {
+            return Response.fail("密码重置失败: " + e.getMessage());
+        }
+    }
+
+    @PostMapping("/reset-password")
+    public Response<?> resetPassword(@RequestParam String token, @RequestParam String newPassword) {
+        try {
+            User user = userService.findByResetToken(token);
+            if (user == null) {
+                return Response.fail("无效的重置令牌");
+            }
+
+            // 检查令牌是否过期
+            if (user.getResetTokenExpireTime() < System.currentTimeMillis()) {
+                return Response.fail("重置令牌已过期");
+            }
+
+            // 更新密码
+            userService.updatePassword(user, newPassword);
+
+            // 清除重置令牌
+            user.setResetToken(null);
+            user.setResetTokenExpireTime(null);
+            userService.updateUser(user);
+
+            return Response.success("密码重置成功");
+        } catch (Exception e) {
+            return Response.fail("密码重置失败: " + e.getMessage());
         }
     }
 }
