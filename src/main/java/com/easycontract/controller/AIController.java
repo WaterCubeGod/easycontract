@@ -1,6 +1,7 @@
 package com.easycontract.controller;
 
 import com.easycontract.entity.es.ChatConversation;
+import com.easycontract.entity.vo.MessageRequest;
 import com.easycontract.entity.vo.PageResponse;
 import com.easycontract.entity.vo.Response;
 import com.easycontract.security.JwtUtils;
@@ -21,6 +22,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 import reactor.core.publisher.Flux;
 
 import java.time.LocalDateTime;
@@ -95,13 +98,25 @@ public class AIController {
      * 公共访问的流式对话接口（不需要登录）
      */
     @PostMapping(value = "/public/conversation", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<String> createPublicConversation(@RequestBody String initialPrompt) {
+    public Flux<String> createPublicConversation(@RequestBody MessageRequest request) {
         try {
             // 构建初始上下文
-            String context = "用户: " + initialPrompt;
+            String context = "用户: " + request.getContent();
+            String prompt;
 
-            // 使用提示词工程服务生成提示词
-            String prompt = promptEngineeringService.generateGeneralPrompt(context);
+            // 根据模式选择不同的提示词
+            switch (request.getMode()) {
+                case "contract":
+                    prompt = promptEngineeringService.generateContractCreationPrompt(context, request.getContent());
+                    break;
+                case "check":
+                    prompt = promptEngineeringService.generateContractValidationPrompt(context, request.getContent());
+                    break;
+                case "chat":
+                default:
+                    prompt = promptEngineeringService.generateGeneralPrompt(context);
+                    break;
+            }
 
             // 直接调用AI生成流式文本，不保存对话
             return aiService.generateText(prompt);
@@ -114,13 +129,25 @@ public class AIController {
      * 公共访问的流式消息接口（不需要登录）
      */
     @PostMapping(value = "/public/message", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<String> sendPublicMessage(@RequestBody String content) {
+    public Flux<String> sendPublicMessage(@RequestBody MessageRequest request) {
         try {
             // 构建初始上下文
-            String context = "用户: " + content;
+            String context = "用户: " + request.getContent();
+            String prompt;
 
-            // 使用提示词工程服务生成提示词
-            String prompt = promptEngineeringService.generateGeneralPrompt(context);
+            // 根据模式选择不同的提示词
+            switch (request.getMode()) {
+                case "contract":
+                    prompt = promptEngineeringService.generateContractCreationPrompt(context, request.getContent());
+                    break;
+                case "check":
+                    prompt = promptEngineeringService.generateContractValidationPrompt(context, request.getContent());
+                    break;
+                case "chat":
+                default:
+                    prompt = promptEngineeringService.generateGeneralPrompt(context);
+                    break;
+            }
 
             // 直接调用AI生成流式文本，不保存对话
             return aiService.generateText(prompt);
@@ -129,43 +156,7 @@ public class AIController {
         }
     }
 
-    /**
-     * 公共访问的合同校验接口（不需要登录）
-     */
-    @PostMapping(value = "/public/contract/validate", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<String> validatePublicContract(@RequestBody String contractContent) {
-        try {
-            // 构建初始上下文
-            String context = "用户: 请帮我校验以下合同";
-
-            // 使用提示词工程服务生成提示词
-            String prompt = promptEngineeringService.generateContractValidationPrompt(context, contractContent);
-
-            // 直接调用AI生成流式文本，不保存对话
-            return aiService.generateText(prompt);
-        } catch (Exception e) {
-            return Flux.error(new RuntimeException("合同校验失败: " + e.getMessage()));
-        }
-    }
-
-    /**
-     * 公共访问的合同生成接口（不需要登录）
-     */
-    @PostMapping(value = "/public/contract/create", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<String> createPublicContract(@RequestBody String requirements) {
-        try {
-            // 构建初始上下文
-            String context = "用户: 请根据以下需求生成合同";
-
-            // 使用提示词工程服务生成提示词
-            String prompt = promptEngineeringService.generateContractCreationPrompt(context, requirements);
-
-            // 直接调用AI生成流式文本，不保存对话
-            return aiService.generateText(prompt);
-        } catch (Exception e) {
-            return Flux.error(new RuntimeException("合同生成失败: " + e.getMessage()));
-        }
-    }
+    // 已将合同校验和生成功能集成到公共消息接口中，通过mode参数指定
 
     //---------------------- 树形对话结构相关接口 ----------------------
     // 所有对话都使用树形结构存储，支持分支和编辑功能
@@ -173,8 +164,8 @@ public class AIController {
     /**
      * 创建新的对话
      */
-    @PostMapping(value = "/conversation", produces = MediaType.APPLICATION_STREAM_JSON_VALUE)
-    public Flux<String> createConversation(@RequestHeader(value = "Authorization", required = false) String authHeader, @RequestBody String initialPrompt) {
+    @PostMapping(value = "/conversation", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public Flux<String> createConversation(@RequestHeader(value = "Authorization", required = false) String authHeader, @RequestBody MessageRequest request) {
         UserDetailsImpl currentUser = getCurrentUserFromJwt(authHeader);
         if (currentUser == null) {
             return Flux.error(new RuntimeException("用户未登录或令牌无效"));
@@ -183,15 +174,29 @@ public class AIController {
         ChatConversation conversation = chatConversationService.createConversation(
                 currentUser.getId(),
                 currentUser.getUsername(),
-                initialPrompt
+                request.getContent()
         );
 
         // 用于收集完整响应
         AtomicReference<StringBuilder> responseCollector = new AtomicReference<>(new StringBuilder());
         String userMessageId = conversation.getMessages().get(0).getMessageId();
 
-        // 调用AI生成流式文本，使用通用提示词
-        return aiService.generateGeneralResponse(conversation, userMessageId)
+        // 根据模式选择不同的响应生成方式
+        Flux<String> responseFlux;
+        switch (request.getMode()) {
+            case "contract":
+                responseFlux = aiService.generateContractCreation(conversation, userMessageId, request.getContent());
+                break;
+            case "check":
+                responseFlux = aiService.generateContractValidation(conversation, userMessageId, request.getContent());
+                break;
+            case "chat":
+            default:
+                responseFlux = aiService.generateGeneralResponse(conversation, userMessageId);
+                break;
+        }
+
+        return responseFlux
                 .doOnNext(chunk -> {
                     // 收集响应内容
                     responseCollector.get().append(chunk);
@@ -296,8 +301,8 @@ public class AIController {
     public Flux<String> addMessageToConversation(
             @RequestHeader(value = "Authorization", required = false) String authHeader,
             @PathVariable String conversationId,
-            @RequestParam String parentMessageId,
-            @RequestBody String content) {
+            @RequestParam(required = false) String parentMessageId,
+            @RequestBody MessageRequest request) {
 
         UserDetailsImpl currentUser = getCurrentUserFromJwt(authHeader);
         if (currentUser == null) {
@@ -315,7 +320,7 @@ public class AIController {
         }
 
         // 添加用户消息
-        conversation = chatConversationService.addUserMessage(conversationId, content, parentMessageId);
+        conversation = chatConversationService.addUserMessage(conversationId, request.getContent(), parentMessageId);
 
         // 获取最新添加的用户消息的ID
         String lastMessageId = conversation.getMessages().stream()
@@ -334,8 +339,22 @@ public class AIController {
         // 用于收集完整响应
         AtomicReference<StringBuilder> responseCollector = new AtomicReference<>(new StringBuilder());
 
-        // 调用AI生成流式文本，使用通用提示词
-        return aiService.generateGeneralResponse(conversation, lastMessageId)
+        // 根据模式选择不同的响应生成方式
+        Flux<String> responseFlux;
+        switch (request.getMode()) {
+            case "contract":
+                responseFlux = aiService.generateContractCreation(conversation, lastMessageId, request.getContent());
+                break;
+            case "check":
+                responseFlux = aiService.generateContractValidation(conversation, lastMessageId, request.getContent());
+                break;
+            case "chat":
+            default:
+                responseFlux = aiService.generateGeneralResponse(conversation, lastMessageId);
+                break;
+        }
+
+        return responseFlux
                 .doOnNext(chunk -> {
                     // 收集响应内容
                     responseCollector.get().append(chunk);
