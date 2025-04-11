@@ -1,5 +1,6 @@
 package com.easycontract.service;
 
+import com.easycontract.entity.enums.ContractEnum;
 import com.easycontract.entity.es.ChatConversation;
 import reactor.core.publisher.Flux;
 
@@ -41,7 +42,9 @@ public interface AIService {
      * @param conversation 对话对象
      * @param currentMessageId 当前消息ID
      * @param requirements 合同需求
+     * @param contractType 合同类型，如果为 null 则使用 NULL_CONTRACT
      * @return 文本流
      */
-    Flux<String> generateContractCreation(ChatConversation conversation, String currentMessageId, String requirements);
+    Flux<String> generateContractCreation(ChatConversation conversation, String currentMessageId,
+                                        String requirements, ContractEnum contractType);
 }

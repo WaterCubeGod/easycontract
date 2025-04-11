@@ -2,6 +2,7 @@ package com.easycontract.service.impl;
 
 import com.easycontract.configuration.AIConfig;
 import com.easycontract.entity.ai.*;
+import com.easycontract.entity.enums.ContractEnum;
 import com.easycontract.service.AIService;
 import com.easycontract.service.PromptEngineeringService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -212,12 +213,25 @@ public class DeepSeekAIService implements AIService {
     }
 
     @Override
-    public Flux<String> generateContractCreation(ChatConversation conversation, String currentMessageId, String requirements) {
+    public Flux<String> generateContractCreation(ChatConversation conversation, String currentMessageId,
+                                              String requirements, ContractEnum contractType) {
         // 构建对话上下文
         String context = buildConversationContext(conversation, currentMessageId);
 
-        // 使用合同生成提示词
-        String prompt = promptEngineeringService.generateContractCreationPrompt(context, requirements);
+        // 如果合同类型为 null，则使用 NULL_CONTRACT
+        if (contractType == null) {
+            contractType = ContractEnum.NULL_CONTRACT;
+        }
+
+        // 根据合同类型生成提示词
+        String prompt;
+        if (contractType == ContractEnum.NULL_CONTRACT) {
+            // 使用通用合同生成提示词
+            prompt = promptEngineeringService.generateContractCreationPrompt(context, requirements);
+        } else {
+            // 使用特定合同类型的提示词
+            prompt = promptEngineeringService.generateContractPrompt(context, requirements, contractType);
+        }
 
         // 生成文本
         return generateText(prompt);
