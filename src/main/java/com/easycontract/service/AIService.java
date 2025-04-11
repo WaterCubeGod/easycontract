@@ -15,7 +15,33 @@ public interface AIService {
      * 构建对话上下文
      * @param conversation 对话对象
      * @param currentMessageId 当前消息ID
-     * @return 构建的上下文字符串
+     * @return 构建的上下文字符串（不包含提示词）
      */
     String buildConversationContext(ChatConversation conversation, String currentMessageId);
+
+    /**
+     * 使用通用提示词生成文本
+     * @param conversation 对话对象
+     * @param currentMessageId 当前消息ID
+     * @return 文本流
+     */
+    Flux<String> generateGeneralResponse(ChatConversation conversation, String currentMessageId);
+
+    /**
+     * 使用合同校验提示词生成文本
+     * @param conversation 对话对象
+     * @param currentMessageId 当前消息ID
+     * @param contractContent 合同内容
+     * @return 文本流
+     */
+    Flux<String> generateContractValidation(ChatConversation conversation, String currentMessageId, String contractContent);
+
+    /**
+     * 使用合同生成提示词生成文本
+     * @param conversation 对话对象
+     * @param currentMessageId 当前消息ID
+     * @param requirements 合同需求
+     * @return 文本流
+     */
+    Flux<String> generateContractCreation(ChatConversation conversation, String currentMessageId, String requirements);
 }

@@ -3,6 +3,8 @@ package com.easycontract.service.impl;
 import com.easycontract.configuration.AIConfig;
 import com.easycontract.entity.ai.*;
 import com.easycontract.service.AIService;
+import com.easycontract.service.PromptEngineeringService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -20,6 +22,9 @@ public class DeepSeekAIService implements AIService {
 
     private final WebClient webClient;
     private final AIConfig aiConfig;
+
+    @Autowired
+    private PromptEngineeringService promptEngineeringService;
 
     public DeepSeekAIService(AIConfig aiConfig) {
         this.aiConfig = aiConfig;
@@ -159,7 +164,7 @@ public class DeepSeekAIService implements AIService {
 
         // 计算当前上下文的token数
         int currentTokens = estimateTokenCount(context.toString());
-        // 保留一些空间给最后的提示语
+        // 保留一些空间给提示词
         int reservedTokens = 100;
 
         // 从最早的消息开始添加，直到达到token限制
@@ -179,9 +184,42 @@ public class DeepSeekAIService implements AIService {
             currentTokens += messageTokens;
         }
 
-        // 添加当前用户的问题
-        context.append("请基于以上对话历史回答用户的问题。");
-
         return context.toString();
+    }
+
+    @Override
+    public Flux<String> generateGeneralResponse(ChatConversation conversation, String currentMessageId) {
+        // 构建对话上下文
+        String context = buildConversationContext(conversation, currentMessageId);
+
+        // 使用通用提示词
+        String prompt = promptEngineeringService.generateGeneralPrompt(context);
+
+        // 生成文本
+        return generateText(prompt);
+    }
+
+    @Override
+    public Flux<String> generateContractValidation(ChatConversation conversation, String currentMessageId, String contractContent) {
+        // 构建对话上下文
+        String context = buildConversationContext(conversation, currentMessageId);
+
+        // 使用合同校验提示词
+        String prompt = promptEngineeringService.generateContractValidationPrompt(context, contractContent);
+
+        // 生成文本
+        return generateText(prompt);
+    }
+
+    @Override
+    public Flux<String> generateContractCreation(ChatConversation conversation, String currentMessageId, String requirements) {
+        // 构建对话上下文
+        String context = buildConversationContext(conversation, currentMessageId);
+
+        // 使用合同生成提示词
+        String prompt = promptEngineeringService.generateContractCreationPrompt(context, requirements);
+
+        // 生成文本
+        return generateText(prompt);
     }
 }
