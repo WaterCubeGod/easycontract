@@ -9,7 +9,11 @@ import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+
+import com.easycontract.entity.es.ChatConversation;
 
 @Service
 public class DeepSeekAIService implements AIService {
@@ -98,5 +102,86 @@ public class DeepSeekAIService implements AIService {
 
         request.setMessages(messages);
         return request;
+    }
+
+    /**
+     * 简单估算文本的token数量
+     * 这是一个粗略的估计，实际token数可能因模型而异
+     */
+    private int estimateTokenCount(String text) {
+        if (text == null || text.isEmpty()) {
+            return 0;
+        }
+        // 粗略估计：英文大约每4个字符为1个token，中文大约每1.5个字符为1个token
+        int englishChars = 0;
+        int chineseChars = 0;
+
+        for (char c : text.toCharArray()) {
+            if (Character.UnicodeBlock.of(c) == Character.UnicodeBlock.CJK_UNIFIED_IDEOGRAPHS) {
+                chineseChars++;
+            } else {
+                englishChars++;
+            }
+        }
+
+        return (int) (englishChars / 4.0 + chineseChars / 1.5);
+    }
+
+    @Override
+    public String buildConversationContext(ChatConversation conversation, String currentMessageId) {
+        // 使用配置的最大上下文长度
+        int maxContextTokens = aiConfig.getDeepseek().getMaxContextTokens();
+        // 存储消息的映射，便于查找
+        Map<String, ChatConversation.Message> messagesById = new HashMap<>();
+        for (ChatConversation.Message message : conversation.getMessages()) {
+            messagesById.put(message.getMessageId(), message);
+        }
+
+        // 构建对话历史
+        List<ChatConversation.Message> conversationHistory = new ArrayList<>();
+        String messageId = currentMessageId;
+
+        // 从当前消息开始，向上追溯对话历史
+        while (messageId != null) {
+            ChatConversation.Message message = messagesById.get(messageId);
+            if (message == null) break;
+
+            // 将消息添加到历史记录的开头（保持时间顺序）
+            conversationHistory.add(0, message);
+
+            // 获取父消息ID
+            messageId = message.getParentMessageId();
+        }
+
+        // 构建上下文字符串
+        StringBuilder context = new StringBuilder();
+        context.append("以下是之前的对话历史：\n\n");
+
+        // 计算当前上下文的token数
+        int currentTokens = estimateTokenCount(context.toString());
+        // 保留一些空间给最后的提示语
+        int reservedTokens = 100;
+
+        // 从最早的消息开始添加，直到达到token限制
+        for (ChatConversation.Message message : conversationHistory) {
+            String role = message.getRole().equals("user") ? "用户" : "AI";
+            String messageText = role + ": " + message.getContent() + "\n\n";
+            int messageTokens = estimateTokenCount(messageText);
+
+            // 检查是否超出限制
+            if (currentTokens + messageTokens + reservedTokens > maxContextTokens) {
+                // 如果超出限制，停止添加更多消息
+                context.append("注意：由于对话历史过长，只显示了最近的部分对话。\n\n");
+                break;
+            }
+
+            context.append(messageText);
+            currentTokens += messageTokens;
+        }
+
+        // 添加当前用户的问题
+        context.append("请基于以上对话历史回答用户的问题。");
+
+        return context.toString();
     }
 }

@@ -23,6 +23,9 @@ import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -76,6 +79,8 @@ public class AIController {
         return getCurrentUser();
     }
 
+
+
     // 仅管理员可以访问的测试接口
     @GetMapping("/admin/test")
     public Response<?> adminOnlyEndpoint() {
@@ -88,10 +93,11 @@ public class AIController {
     @PostMapping(value = "/public/conversation", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<String> createPublicConversation(@RequestBody String initialPrompt) {
         try {
+            // 构建初始上下文
+            String context = "用户: " + initialPrompt + "\n\n请回答用户的问题。";
+
             // 直接调用AI生成流式文本，不保存对话
-            return aiService.generateText(initialPrompt)
-                    // 将每个文本块包装为SSE格式
-                    .map(chunk -> "data: " + chunk + "\n\n");
+            return aiService.generateText(context);
         } catch (Exception e) {
             return Flux.error(new RuntimeException("创建对话失败: " + e.getMessage()));
         }
@@ -103,10 +109,11 @@ public class AIController {
     @PostMapping(value = "/public/message", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<String> sendPublicMessage(@RequestBody String content) {
         try {
+            // 构建初始上下文
+            String context = "用户: " + content + "\n\n请回答用户的问题。";
+
             // 直接调用AI生成流式文本，不保存对话
-            return aiService.generateText(content)
-                    // 将每个文本块包装为SSE格式
-                    .map(chunk -> "data: " + chunk + "\n\n");
+            return aiService.generateText(context);
         } catch (Exception e) {
             return Flux.error(new RuntimeException("发送消息失败: " + e.getMessage()));
         }
@@ -118,7 +125,7 @@ public class AIController {
     /**
      * 创建新的对话
      */
-    @PostMapping(value = "/conversation", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @PostMapping(value = "/conversation", produces = MediaType.APPLICATION_STREAM_JSON_VALUE)
     public Flux<String> createConversation(@RequestHeader(value = "Authorization", required = false) String authHeader, @RequestBody String initialPrompt) {
         UserDetailsImpl currentUser = getCurrentUserFromJwt(authHeader);
         if (currentUser == null) {
@@ -135,8 +142,11 @@ public class AIController {
         AtomicReference<StringBuilder> responseCollector = new AtomicReference<>(new StringBuilder());
         String userMessageId = conversation.getMessages().get(0).getMessageId();
 
+        // 构建初始上下文（对于新对话，上下文只有一条消息）
+        String context = "用户: " + initialPrompt + "\n\n请回答用户的问题。";
+
         // 调用AI生成流式文本
-        return aiService.generateText(initialPrompt)
+        return aiService.generateText(context)
                 .doOnNext(chunk -> {
                     // 收集响应内容
                     responseCollector.get().append(chunk);
@@ -156,9 +166,7 @@ public class AIController {
                     } catch (Exception e) {
                         System.err.println("保存流式响应失败: " + e.getMessage());
                     }
-                })
-                // 将每个文本块包装为SSE格式
-                .map(chunk -> "data: " + chunk + "\n\n");
+                });
     }
 
     /**
@@ -281,8 +289,11 @@ public class AIController {
         // 用于收集完整响应
         AtomicReference<StringBuilder> responseCollector = new AtomicReference<>(new StringBuilder());
 
-        // 调用AI生成流式文本
-        return aiService.generateText(content)
+        // 构建完整的对话上下文
+        String contextWithCurrentMessage = aiService.buildConversationContext(conversation, lastMessageId);
+
+        // 调用AI生成流式文本，使用完整上下文
+        return aiService.generateText(contextWithCurrentMessage)
                 .doOnNext(chunk -> {
                     // 收集响应内容
                     responseCollector.get().append(chunk);
@@ -302,9 +313,7 @@ public class AIController {
                     } catch (Exception e) {
                         System.err.println("保存流式响应失败: " + e.getMessage());
                     }
-                })
-                // 将每个文本块包装为SSE格式
-                .map(chunk -> "data: " + chunk + "\n\n");
+                });
 
     }
 
