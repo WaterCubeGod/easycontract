@@ -20,9 +20,6 @@ public class ChatConversationServiceImpl implements ChatConversationService {
     @Autowired
     private ChatConversationRepository chatConversationRepository;
 
-    @Autowired
-    private AIService aiService;
-
     @Override
     public ChatConversation createConversation(Long userId, String username, String initialPrompt) {
         ChatConversation conversation = new ChatConversation();

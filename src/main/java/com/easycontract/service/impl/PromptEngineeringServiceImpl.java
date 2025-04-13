@@ -1,6 +1,7 @@
 package com.easycontract.service.impl;
 
 import com.easycontract.entity.enums.ContractEnum;
+import com.easycontract.entity.vo.MessageRequest;
 import com.easycontract.service.PromptEngineeringService;
 import com.easycontract.service.prompt.PromptStrategy;
 import com.easycontract.service.prompt.PromptStrategyFactory;
@@ -17,35 +18,22 @@ public class PromptEngineeringServiceImpl implements PromptEngineeringService {
     private PromptStrategyFactory promptStrategyFactory;
 
     @Override
-    public String generateGeneralPrompt(String context) {
+    public String generatePrompt(String context, MessageRequest request) {
         // 使用通用对话策略
-        PromptStrategy strategy = promptStrategyFactory.getGeneralStrategy();
-        return strategy.generatePrompt(context, null);
-    }
-
-    @Override
-    public String generateContractValidationPrompt(String context, String contractContent) {
-        // 使用合同校验策略
-        PromptStrategy strategy = promptStrategyFactory.getContractValidationStrategy();
-        return strategy.generatePrompt(context, contractContent);
-    }
-
-    @Override
-    public String generateContractCreationPrompt(String context, String requirements) {
-        // 使用通用合同生成策略
-        PromptStrategy strategy = promptStrategyFactory.getContractCreationStrategy(ContractEnum.NULL_CONTRACT);
-        return strategy.generatePrompt(context, requirements);
-    }
-
-    @Override
-    public String generateContractPrompt(String context, String requirements, ContractEnum contractType) {
-        // 如果合同类型为 null，则使用 NULL_CONTRACT
-        if (contractType == null) {
-            contractType = ContractEnum.NULL_CONTRACT;
+        PromptStrategy strategy;
+        switch (request.getMode()) {
+            case "contract":
+                // 使用合同生成策略，如果指定了合同类型则使用对应的策略
+                strategy = promptStrategyFactory.getContractCreationStrategy(request.getContractEnum());
+                break;
+            case "check":
+                strategy = promptStrategyFactory.getContractValidationStrategy();
+                break;
+            case "chat":
+            default:
+                strategy = promptStrategyFactory.getGeneralStrategy();
+                break;
         }
-
-        // 根据合同类型选择对应的策略
-        PromptStrategy strategy = promptStrategyFactory.getContractCreationStrategy(contractType);
-        return strategy.generatePrompt(context, requirements);
+        return strategy.generatePrompt(context);
     }
 }

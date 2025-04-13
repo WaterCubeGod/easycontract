@@ -49,9 +49,6 @@ public class AIController {
     @Autowired
     private UserDetailsServiceImpl userDetailsService;
 
-    @Autowired
-    private PromptEngineeringService promptEngineeringService;
-
     public AIController(AIService aiService) {
         this.aiService = aiService;
     }
@@ -94,70 +91,6 @@ public class AIController {
         return Response.success("管理员专属接口访问成功");
     }
 
-    /**
-     * 公共访问的流式对话接口（不需要登录）
-     */
-    @PostMapping(value = "/public/conversation", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<String> createPublicConversation(@RequestBody MessageRequest request) {
-        try {
-            // 构建初始上下文
-            String context = "用户: " + request.getContent();
-            String prompt;
-
-            // 根据模式选择不同的提示词
-            switch (request.getMode()) {
-                case "contract":
-                    // 生成合同提示词，如果指定了合同类型则使用对应的策略
-                    prompt = promptEngineeringService.generateContractPrompt(context, request.getContent(), request.getContractEnum());
-                    break;
-                case "check":
-                    prompt = promptEngineeringService.generateContractValidationPrompt(context, request.getContent());
-                    break;
-                case "chat":
-                default:
-                    prompt = promptEngineeringService.generateGeneralPrompt(context);
-                    break;
-            }
-
-            // 直接调用AI生成流式文本，不保存对话
-            return aiService.generateText(prompt);
-        } catch (Exception e) {
-            return Flux.error(new RuntimeException("创建对话失败: " + e.getMessage()));
-        }
-    }
-
-    /**
-     * 公共访问的流式消息接口（不需要登录）
-     */
-    @PostMapping(value = "/public/message", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<String> sendPublicMessage(@RequestBody MessageRequest request) {
-        try {
-            // 构建初始上下文
-            String context = "用户: " + request.getContent();
-            String prompt;
-
-            // 根据模式选择不同的提示词
-            switch (request.getMode()) {
-                case "contract":
-                    // 生成合同提示词，如果指定了合同类型则使用对应的策略
-                    prompt = promptEngineeringService.generateContractPrompt(context, request.getContent(), request.getContractEnum());
-                    break;
-                case "check":
-                    prompt = promptEngineeringService.generateContractValidationPrompt(context, request.getContent());
-                    break;
-                case "chat":
-                default:
-                    prompt = promptEngineeringService.generateGeneralPrompt(context);
-                    break;
-            }
-
-            // 直接调用AI生成流式文本，不保存对话
-            return aiService.generateText(prompt);
-        } catch (Exception e) {
-            return Flux.error(new RuntimeException("发送消息失败: " + e.getMessage()));
-        }
-    }
-
     // 已将合同校验和生成功能集成到公共消息接口中，通过mode参数指定
 
     //---------------------- 树形对话结构相关接口 ----------------------
@@ -172,33 +105,12 @@ public class AIController {
         if (currentUser == null) {
             return Flux.error(new RuntimeException("用户未登录或令牌无效"));
         }
-        // 创建新对话
-        ChatConversation conversation = chatConversationService.createConversation(
-                currentUser.getId(),
-                currentUser.getUsername(),
-                request.getContent()
-        );
 
         // 用于收集完整响应
         AtomicReference<StringBuilder> responseCollector = new AtomicReference<>(new StringBuilder());
-        String userMessageId = conversation.getMessages().get(0).getMessageId();
 
         // 根据模式选择不同的响应生成方式
-        Flux<String> responseFlux;
-        switch (request.getMode()) {
-            case "contract":
-                // 使用合同生成策略，如果指定了合同类型则使用对应的策略
-                responseFlux = aiService.generateContractCreation(conversation, userMessageId,
-                        request.getContent(), request.getContractEnum());
-                break;
-            case "check":
-                responseFlux = aiService.generateContractValidation(conversation, userMessageId, request.getContent());
-                break;
-            case "chat":
-            default:
-                responseFlux = aiService.generateGeneralResponse(conversation, userMessageId);
-                break;
-        }
+        Flux<String> responseFlux = aiService.responseText(request, null, null);
 
         return responseFlux
                 .doOnNext(chunk -> {
@@ -209,6 +121,15 @@ public class AIController {
                     // 当流完成时，保存AI响应
                     String fullResponse = responseCollector.get().toString();
                     try {
+                        // 创建新对话
+                        ChatConversation conversation = chatConversationService.createConversation(
+                                currentUser.getId(),
+                                currentUser.getUsername(),
+                                request.getContent()
+                        );
+
+                        String userMessageId = conversation.getMessages().get(0).getMessageId();
+
                         chatConversationService.addAssistantMessage(
                                 conversation.getConversationId(),
                                 fullResponse,
@@ -221,6 +142,79 @@ public class AIController {
                         System.err.println("保存流式响应失败: " + e.getMessage());
                     }
                 });
+    }
+
+    /**
+     * 在对话中添加用户消息并获取AI响应
+     */
+    @PostMapping(value = "/conversation/{conversationId}/message", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public Flux<String> addMessageToConversation(
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            @PathVariable String conversationId,
+            @RequestParam(required = false) String parentMessageId,
+            @RequestBody MessageRequest request) {
+
+        UserDetailsImpl currentUser = getCurrentUserFromJwt(authHeader);
+        if (currentUser == null) {
+            return Flux.error(new RuntimeException("用户未登录或令牌无效"));
+        }
+
+        ChatConversation conversation = chatConversationService.getConversation(conversationId);
+        if (conversation == null) {
+            return Flux.error(new RuntimeException("对话不存在"));
+        }
+
+        // 检查是否是当前用户的对话
+        if (!conversation.getUserId().equals(currentUser.getId())) {
+            return Flux.error(new RuntimeException("无权在此对话中添加消息"));
+        }
+
+
+        // 用于收集完整响应
+        AtomicReference<StringBuilder> responseCollector = new AtomicReference<>(new StringBuilder());
+
+        // 根据模式选择不同的响应生成方式
+        Flux<String> responseFlux = aiService.responseText(request, conversationId, parentMessageId);
+
+        return responseFlux
+                .doOnNext(chunk -> {
+                    // 收集响应内容
+                    responseCollector.get().append(chunk);
+                })
+                .doOnComplete(() -> {
+                    // 当流完成时，保存AI响应
+                    String fullResponse = responseCollector.get().toString();
+                    try {
+                        // 获取最新添加的用户消息的ID
+                        String lastMessageId = conversation.getMessages().stream()
+                                .filter(m -> m.getRole().equals("user") &&
+                                        (m.getParentMessageId() != null && m.getParentMessageId().equals(parentMessageId)))
+                                .max((m1, m2) -> {
+                                    // 安全地比较时间戳，处理可能的 null 值
+                                    if (m1.getTimestamp() == null && m2.getTimestamp() == null) return 0;
+                                    if (m1.getTimestamp() == null) return -1;
+                                    if (m2.getTimestamp() == null) return 1;
+                                    return m1.getTimestamp().compareTo(m2.getTimestamp());
+                                })
+                                .map(ChatConversation.Message::getMessageId)
+                                .orElse(parentMessageId);
+
+                        // 添加用户消息
+                        chatConversationService.addUserMessage(conversationId, request.getContent(), parentMessageId);
+                        // 添加AI响应
+                        chatConversationService.addAssistantMessage(
+                                conversationId,
+                                fullResponse,
+                                lastMessageId,
+                                "deepseek-chat", // 模型名称
+                                0, // 由于流式输出无法获取token数，这里设为0
+                                0
+                        );
+                    } catch (Exception e) {
+                        System.err.println("保存流式响应失败: " + e.getMessage());
+                    }
+                });
+
     }
 
     /**
@@ -296,92 +290,6 @@ public class AIController {
 
         Map<String, Object> tree = chatConversationService.getConversationTree(conversationId);
         return Response.success(tree);
-    }
-
-    /**
-     * 在对话中添加用户消息并获取AI响应
-     */
-    @PostMapping(value = "/conversation/{conversationId}/message", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<String> addMessageToConversation(
-            @RequestHeader(value = "Authorization", required = false) String authHeader,
-            @PathVariable String conversationId,
-            @RequestParam(required = false) String parentMessageId,
-            @RequestBody MessageRequest request) {
-
-        UserDetailsImpl currentUser = getCurrentUserFromJwt(authHeader);
-        if (currentUser == null) {
-            return Flux.error(new RuntimeException("用户未登录或令牌无效"));
-        }
-
-        ChatConversation conversation = chatConversationService.getConversation(conversationId);
-        if (conversation == null) {
-            return Flux.error(new RuntimeException("对话不存在"));
-        }
-
-        // 检查是否是当前用户的对话
-        if (!conversation.getUserId().equals(currentUser.getId())) {
-            return Flux.error(new RuntimeException("无权在此对话中添加消息"));
-        }
-
-        // 添加用户消息
-        conversation = chatConversationService.addUserMessage(conversationId, request.getContent(), parentMessageId);
-
-        // 获取最新添加的用户消息的ID
-        String lastMessageId = conversation.getMessages().stream()
-                .filter(m -> m.getRole().equals("user") &&
-                       (m.getParentMessageId() != null && m.getParentMessageId().equals(parentMessageId)))
-                .max((m1, m2) -> {
-                    // 安全地比较时间戳，处理可能的 null 值
-                    if (m1.getTimestamp() == null && m2.getTimestamp() == null) return 0;
-                    if (m1.getTimestamp() == null) return -1;
-                    if (m2.getTimestamp() == null) return 1;
-                    return m1.getTimestamp().compareTo(m2.getTimestamp());
-                })
-                .map(ChatConversation.Message::getMessageId)
-                .orElse(parentMessageId);
-
-        // 用于收集完整响应
-        AtomicReference<StringBuilder> responseCollector = new AtomicReference<>(new StringBuilder());
-
-        // 根据模式选择不同的响应生成方式
-        Flux<String> responseFlux;
-        switch (request.getMode()) {
-            case "contract":
-                // 使用合同生成策略，如果指定了合同类型则使用对应的策略
-                responseFlux = aiService.generateContractCreation(conversation, lastMessageId,
-                        request.getContent(), request.getContractEnum());
-                break;
-            case "check":
-                responseFlux = aiService.generateContractValidation(conversation, lastMessageId, request.getContent());
-                break;
-            case "chat":
-            default:
-                responseFlux = aiService.generateGeneralResponse(conversation, lastMessageId);
-                break;
-        }
-
-        return responseFlux
-                .doOnNext(chunk -> {
-                    // 收集响应内容
-                    responseCollector.get().append(chunk);
-                })
-                .doOnComplete(() -> {
-                    // 当流完成时，保存AI响应
-                    String fullResponse = responseCollector.get().toString();
-                    try {
-                        chatConversationService.addAssistantMessage(
-                                conversationId,
-                                fullResponse,
-                                lastMessageId,
-                                "deepseek-chat", // 模型名称
-                                0, // 由于流式输出无法获取token数，这里设为0
-                                0
-                        );
-                    } catch (Exception e) {
-                        System.err.println("保存流式响应失败: " + e.getMessage());
-                    }
-                });
-
     }
 
     /**

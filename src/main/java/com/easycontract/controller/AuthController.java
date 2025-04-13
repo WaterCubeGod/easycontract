@@ -54,7 +54,8 @@ public class AuthController {
 
             return Response.success(new LoginResponse(jwt, userDetails.getId(), userDetails.getUsername(), roles));
         } catch (Exception e) {
-            return Response.fail("登录失败: " + e.getMessage());
+            e.printStackTrace();
+            return Response.fail("登录失败");
         }
     }
 

@@ -19,16 +19,12 @@ import java.util.Map;
 import com.easycontract.entity.es.ChatConversation;
 
 @Service
-public class DeepSeekAIService implements AIService {
+public class DeepSeekAIService extends AbstractAIService {
 
     private final WebClient webClient;
-    private final AIConfig aiConfig;
-
-    @Autowired
-    private PromptEngineeringService promptEngineeringService;
 
     public DeepSeekAIService(AIConfig aiConfig) {
-        this.aiConfig = aiConfig;
+        super(aiConfig);
         this.webClient = WebClient.builder()
                 .baseUrl(aiConfig.getDeepseek().getApiUrl())
                 .defaultHeader("Authorization", "Bearer " + aiConfig.getDeepseek().getApiKey())
@@ -93,147 +89,5 @@ public class DeepSeekAIService implements AIService {
                 });
     }
 
-    private ChatRequest createChatRequest(String prompt, boolean stream) {
-        ChatRequest request = new ChatRequest();
-        request.setModel(aiConfig.getDeepseek().getModel());
-        request.setTemperature(aiConfig.getDeepseek().getTemperature());
-        request.setMax_tokens(aiConfig.getDeepseek().getMaxTokens());
-        request.setStream(stream);
 
-        List<Message> messages = new ArrayList<>();
-        Message userMessage = new Message();
-        userMessage.setRole("user");
-        userMessage.setContent(prompt);
-        messages.add(userMessage);
-
-        request.setMessages(messages);
-        return request;
-    }
-
-    /**
-     * 简单估算文本的token数量
-     * 这是一个粗略的估计，实际token数可能因模型而异
-     */
-    private int estimateTokenCount(String text) {
-        if (text == null || text.isEmpty()) {
-            return 0;
-        }
-        // 粗略估计：英文大约每4个字符为1个token，中文大约每1.5个字符为1个token
-        int englishChars = 0;
-        int chineseChars = 0;
-
-        for (char c : text.toCharArray()) {
-            if (Character.UnicodeBlock.of(c) == Character.UnicodeBlock.CJK_UNIFIED_IDEOGRAPHS) {
-                chineseChars++;
-            } else {
-                englishChars++;
-            }
-        }
-
-        return (int) (englishChars / 4.0 + chineseChars / 1.5);
-    }
-
-    @Override
-    public String buildConversationContext(ChatConversation conversation, String currentMessageId) {
-        // 使用配置的最大上下文长度
-        int maxContextTokens = aiConfig.getDeepseek().getMaxContextTokens();
-        // 存储消息的映射，便于查找
-        Map<String, ChatConversation.Message> messagesById = new HashMap<>();
-        for (ChatConversation.Message message : conversation.getMessages()) {
-            messagesById.put(message.getMessageId(), message);
-        }
-
-        // 构建对话历史
-        List<ChatConversation.Message> conversationHistory = new ArrayList<>();
-        String messageId = currentMessageId;
-
-        // 从当前消息开始，向上追溯对话历史
-        while (messageId != null) {
-            ChatConversation.Message message = messagesById.get(messageId);
-            if (message == null) break;
-
-            // 将消息添加到历史记录的开头（保持时间顺序）
-            conversationHistory.add(0, message);
-
-            // 获取父消息ID
-            messageId = message.getParentMessageId();
-        }
-
-        // 构建上下文字符串
-        StringBuilder context = new StringBuilder();
-        context.append("以下是之前的对话历史：\n\n");
-
-        // 计算当前上下文的token数
-        int currentTokens = estimateTokenCount(context.toString());
-        // 保留一些空间给提示词
-        int reservedTokens = 100;
-
-        // 从最早的消息开始添加，直到达到token限制
-        for (ChatConversation.Message message : conversationHistory) {
-            String role = message.getRole().equals("user") ? "用户" : "AI";
-            String messageText = role + ": " + message.getContent() + "\n\n";
-            int messageTokens = estimateTokenCount(messageText);
-
-            // 检查是否超出限制
-            if (currentTokens + messageTokens + reservedTokens > maxContextTokens) {
-                // 如果超出限制，停止添加更多消息
-                context.append("注意：由于对话历史过长，只显示了最近的部分对话。\n\n");
-                break;
-            }
-
-            context.append(messageText);
-            currentTokens += messageTokens;
-        }
-
-        return context.toString();
-    }
-
-    @Override
-    public Flux<String> generateGeneralResponse(ChatConversation conversation, String currentMessageId) {
-        // 构建对话上下文
-        String context = buildConversationContext(conversation, currentMessageId);
-
-        // 使用通用提示词
-        String prompt = promptEngineeringService.generateGeneralPrompt(context);
-
-        // 生成文本
-        return generateText(prompt);
-    }
-
-    @Override
-    public Flux<String> generateContractValidation(ChatConversation conversation, String currentMessageId, String contractContent) {
-        // 构建对话上下文
-        String context = buildConversationContext(conversation, currentMessageId);
-
-        // 使用合同校验提示词
-        String prompt = promptEngineeringService.generateContractValidationPrompt(context, contractContent);
-
-        // 生成文本
-        return generateText(prompt);
-    }
-
-    @Override
-    public Flux<String> generateContractCreation(ChatConversation conversation, String currentMessageId,
-                                              String requirements, ContractEnum contractType) {
-        // 构建对话上下文
-        String context = buildConversationContext(conversation, currentMessageId);
-
-        // 如果合同类型为 null，则使用 NULL_CONTRACT
-        if (contractType == null) {
-            contractType = ContractEnum.NULL_CONTRACT;
-        }
-
-        // 根据合同类型生成提示词
-        String prompt;
-        if (contractType == ContractEnum.NULL_CONTRACT) {
-            // 使用通用合同生成提示词
-            prompt = promptEngineeringService.generateContractCreationPrompt(context, requirements);
-        } else {
-            // 使用特定合同类型的提示词
-            prompt = promptEngineeringService.generateContractPrompt(context, requirements, contractType);
-        }
-
-        // 生成文本
-        return generateText(prompt);
-    }
 }
